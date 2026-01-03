@@ -1,11 +1,14 @@
 # xls2sepaxml
 
-A web-based tool to convert Excel files (.xlsx, .xls) to SEPA XML transfer files. 
+A web-based tool to convert Excel files (.xlsx, .xls) to **SEPA XML Bulk Transfer** files. 
+This tool allows you to convert a list of recipients from an Excel sheet into a single SEPA-compliant XML file that can be uploaded to your online banking portal to execute multiple transfers at once.
+
 It processes data entirely in-memory for better privacy and security.
 
 ## Features
+- **Bulk Transfers:** Generate a single XML file for multiple payments.
+- **Online Banking Ready:** Output format is standard PAIN.001.001.03, compatible with most banks.
 - **In-Memory Processing:** No files are stored on the server disk.
-- **Smart Column Mapping:** Automatically detects columns like Name, IBAN, Amount, and Purpose.
 - **Data Validation:** Uses `schwifty` for IBAN/BIC validation and `sepaxml` for standardized output.
 - **Interactive Preview:** Verify your data mapping before generating the final XML.
 - **Easy Installation:** Can be installed as a Python package.
