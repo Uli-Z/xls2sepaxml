@@ -48,6 +48,84 @@ def derive_bic(iban_str, provided_bic=None):
         
     return str(bic_obj) if bic_obj else ""
 
+def auto_detect_columns(df):
+    columns = df.columns.tolist()
+    suggested = {}
+    
+    heuristics = {
+        "name": ["name", "recipient", "payee", "empfänger", "begünstigter"],
+        "iban": ["iban"],
+        "bic": ["bic", "swift"],
+        "amount": ["amount", "value", "betrag", "summe"],
+        "description": ["description", "purpose", "verwendungszweck", "zweck"]
+    }
+    
+    iban_pattern = r'[A-Z]{2}\d{2}[A-Z0-9]{11,30}'
+    bic_pattern = r'^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2,5}$'
+    
+    # 1. Try to find IBAN and BIC by content first (very reliable)
+    for col in columns:
+        sample = df[col].dropna().head(3).astype(str).tolist()
+        if not sample: continue
+        
+        # Check for IBAN
+        if all(sub(r'\s+', '', s.upper()) and sub(r'\s+', '', s.upper())[0:2].isalpha() and len(sub(r'\s+', '', s.upper())) > 14 for s in sample):
+            if any(sub(r'\s+', '', s.upper()).startswith(tuple(IBAN.countries.keys())) for s in sample):
+                suggested['iban'] = col
+                continue
+        
+        # Check for BIC
+        if all(sub(r'\s+', '', s.upper()) and 8 <= len(sub(r'\s+', '', s.upper())) <= 11 for s in sample):
+             if all(s[0:4].isalpha() for s in sample):
+                suggested['bic'] = col
+                continue
+
+    # 2. Find Amount (Numeric content + Header Hint)
+    for col in columns:
+        if col in suggested.values(): continue
+        sample = df[col].dropna().head(3).astype(str).tolist()
+        if not sample: continue
+        
+        try:
+            if all(clean_amount(s) > 0 for s in sample):
+                if any(k in col.lower() for k in heuristics['amount']) or 'amount' not in suggested:
+                    suggested['amount'] = col
+        except:
+            continue
+
+    # 3. Find Name and Description among remaining string columns
+    remaining = [c for c in columns if c not in suggested.values()]
+    string_cols = []
+    for col in remaining:
+        sample = df[col].dropna().head(3).astype(str).tolist()
+        if sample:
+            string_cols.append(col)
+            
+    if string_cols:
+        # Sort by average length of content in the first few rows
+        string_cols.sort(key=lambda c: df[c].dropna().head(5).astype(str).str.len().mean())
+        
+        # The shorter one is likely the name, the longer one the description
+        # But prioritize header keywords
+        name_col = None
+        desc_col = None
+        
+        for col in string_cols:
+            if any(k in col.lower() for k in heuristics['name']):
+                name_col = col
+            if any(k in col.lower() for k in heuristics['description']):
+                desc_col = col
+        
+        if not name_col and string_cols:
+            name_col = string_cols[0]
+        if not desc_col and len(string_cols) > 1:
+            desc_col = string_cols[1] if string_cols[1] != name_col else (string_cols[0] if len(string_cols) > 1 else None)
+        
+        if name_col: suggested['name'] = name_col
+        if desc_col: suggested['description'] = desc_col
+
+    return suggested
+
 def create_app():
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
@@ -69,20 +147,7 @@ def create_app():
             columns = df.columns.tolist()
             df_json = df.to_json(orient='split', date_format='iso')
             
-            heuristics = {
-                "name": ["name", "recipient", "payee", "empfänger", "begünstigter"],
-                "iban": ["iban"],
-                "bic": ["bic", "swift"],
-                "amount": ["amount", "value", "betrag", "summe"],
-                "description": ["description", "purpose", "verwendungszweck", "zweck"]
-            }
-            
-            suggested_mapping = {}
-            for field, keywords in heuristics.items():
-                for i, col in enumerate(columns):
-                    if any(k in col.lower() for k in keywords):
-                        suggested_mapping[field] = col
-                        break
+            suggested_mapping = auto_detect_columns(df)
             
             return render_template('mapping.html', columns=columns, suggested=suggested_mapping, df_json=df_json)
 
