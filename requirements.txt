@@ -1,0 +1,6 @@
+pandas
+openpyxl
+sepaxml
+schwifty
+flask
+pytest
