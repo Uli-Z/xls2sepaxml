@@ -18,6 +18,7 @@ setup(
         ],
     },
     author="Ulrich Zorn",
+    license="MIT",
     description="A web-based tool to convert Excel files to SEPA XML transfers.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
